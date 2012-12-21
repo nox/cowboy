@@ -1,5 +1,5 @@
 %% Copyright (c) 2011-2012, Loïc Hoguin <essen@ninenines.eu>
-%% Copyright (c) 2011, Anthony Ramine <nox@dev-extend.eu>
+%% Copyright (c) 2011-2013, Anthony Ramine <n.oxyde@gmail.com>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -460,6 +460,11 @@ parse_header(Name, Req, Default) when Name =:= <<"upgrade">> ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
 			cowboy_http:nonempty_list(Value, fun cowboy_http:token_ci/2)
+		end);
+parse_header(Name, Req, Default) when Name =:= <<"origin">> ->
+	parse_header(Name, Req, Default,
+		fun (Value) ->
+			cowboy_http:origin(Value)
 		end);
 parse_header(Name, Req, Default) ->
 	{Value, Req2} = header(Name, Req, Default),

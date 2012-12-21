@@ -1,5 +1,5 @@
 %% Copyright (c) 2011-2012, Loïc Hoguin <essen@ninenines.eu>
-%% Copyright (c) 2011, Anthony Ramine <nox@dev-extend.eu>
+%% Copyright (c) 2011-2013, Anthony Ramine <n.oxyde@gmail.com>
 %%
 %% Permission to use, copy, modify, and/or distribute this software for any
 %% purpose with or without fee is hereby granted, provided that the above
@@ -17,6 +17,7 @@
 -module(cowboy_http).
 
 %% Parsing.
+-export([origin/1]).
 -export([list/2]).
 -export([nonempty_list/2]).
 -export([cookie_list/1]).
@@ -43,6 +44,7 @@
 -export([ce_identity/1]).
 
 %% Interpretation.
+-export([origin_to_iodata/1]).
 -export([cookie_to_iodata/3]).
 -export([version_to_binary/1]).
 -export([urldecode/1]).
@@ -53,6 +55,7 @@
 
 -type version() :: {Major::non_neg_integer(), Minor::non_neg_integer()}.
 -type headers() :: [{binary(), iodata()}].
+-type origin() :: null | {binary(), binary(), non_neg_integer()}.
 -type status() :: non_neg_integer() | binary().
 
 -export_type([version/0]).
@@ -64,6 +67,32 @@
 -endif.
 
 %% Parsing.
+
+%% @doc Parse an origin.
+-spec origin(binary()) -> origin() | {error, badarg}.
+origin(<<"null">>) ->
+	null;
+origin(Bin) ->
+	token_ci(Bin,
+		fun (<< "://", Rest/bits >>, Scheme) -> origin(Rest, Scheme);
+			(_, _) -> {error, badarg}
+		end).
+
+%% @todo Handle IPv6/IPvFuture hosts
+origin(Bin, Scheme) ->
+	token_ci(Bin, fun (Rest, Host) -> origin(Rest, Scheme, Host) end).
+
+origin(<<>>, <<"http">> = Scheme, Host) ->
+	{Scheme, Host, 80};
+origin(<<>>, <<"https">> = Scheme, Host) ->
+	{Scheme, Host, 443};
+origin(<< $:, Rest/bits >>, Scheme, Host) ->
+	digits(Rest,
+		fun (<<>>, Port) -> {Scheme, Host, Port};
+			(_, _) -> {error, badarg}
+		end);
+origin(_, _, _) ->
+	{error, badarg}.
 
 %% @doc Parse a non-empty list of the given type.
 -spec nonempty_list(binary(), fun()) -> [any(), ...] | {error, badarg}.
@@ -805,6 +834,17 @@ ce_identity(Data) ->
 
 %% Interpretation.
 
+%% @doc Convert an origin triple to its iodata form.
+-spec origin_to_iodata(origin()) -> iodata().
+origin_to_iodata(null) ->
+	<<"null">>;
+origin_to_iodata({<<"http">>, Host, 80}) ->
+	[<<"http://">>, Host];
+origin_to_iodata({<<"https">>, Host, 443}) ->
+	[<<"https://">>, Host];
+origin_to_iodata({Scheme, Host, Port}) ->
+	[Scheme, <<"://">>, Host, $: | integer_to_list(Port)].
+
 %% @doc Convert a cookie name, value and options to its iodata form.
 %% @end
 %%
@@ -956,6 +996,33 @@ x_www_form_urlencoded(Qs) ->
 %% Tests.
 
 -ifdef(TEST).
+
+origin_test_() ->
+	%% {Value, Result}
+	Tests = [
+		{<<>>, {error, badarg}},
+		{<<"null">>, null},
+		{<<"http://foo.example">>, {<<"http">>, <<"foo.example">>, 80}},
+		{<<"http://foo.example:8080">>, {<<"http">>, <<"foo.example">>, 8080}},
+		{<<"https://foo.example">>, {<<"https">>, <<"foo.example">>, 443}},
+		{<<"https://foo.example:9999">>,
+			{<<"https">>, <<"foo.example">>, 9999}},
+		{<<"ftp://foo.example">>, {error, badarg}}
+	],
+	[{V, fun() -> R = origin(V) end} || {V, R} <- Tests].
+
+origin_to_iodata_test_() ->
+	%% {Value, Result}
+	Tests = [
+		{null, <<"null">>},
+		{{<<"http">>, <<"foo.example">>, 80}, <<"http://foo.example">>},
+		{{<<"http">>, <<"foo.example">>, 8080}, <<"http://foo.example:8080">>},
+		{{<<"https">>, <<"foo.example">>, 443}, <<"https://foo.example">>},
+		{{<<"https">>, <<"foo.example">>, 9999},
+			<<"https://foo.example:9999">>}
+	],
+	[{R, fun() -> R = iolist_to_binary(origin_to_iodata(V)) end}
+		|| {V, R} <- Tests].
 
 nonempty_charset_list_test_() ->
 	%% {Value, Result}
