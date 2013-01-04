@@ -75,7 +75,8 @@
 %% ct.
 
 all() ->
-	[{group, http}, {group, https}, {group, onrequest}, {group, onresponse}].
+	[{group, http}, {group, https}, {group, onrequest}, {group, onresponse},
+	 {group, cors}].
 
 groups() ->
 	Tests = [
@@ -131,6 +132,17 @@ groups() ->
 		{onresponse, [], [
 			onresponse_crash,
 			onresponse_reply
+		]},
+		{cors, [parallel], [
+			cors_no_origin,
+			cors_preflight_204,
+			cors_preflight_400,
+			cors_preflight_403,
+			cors_preflight_405,
+			cors_actual_200,
+			cors_actual_200_OPTIONS,
+			cors_actual_400,
+			cors_actual_403
 		]}
 	].
 
@@ -202,6 +214,17 @@ init_per_group(onresponse, Config) ->
 	]),
 	{ok, Client} = cowboy_client:init([]),
 	[{scheme, <<"http">>}, {port, Port}, {opts, []},
+		{transport, Transport}, {client, Client}|Config];
+inet_per_group(cors, Config) ->
+	Port = 33084,
+	Transport = ranch_tcp,
+	{ok, _} = cowboy:start_http(cors, 5, [{port, Port}], [
+		{dispatch, init_dispatch(Config)},
+		{max_keepalive, 5},
+		{timeout, 500}
+	]),
+	{ok, Client} = cowboy_client:init([]),
+	[{scheme, <<"http">>}, {port, Port}, {opts, []},
 		{transport, Transport}, {client, Client}|Config].
 
 end_per_group(https, Config) ->
@@ -265,6 +288,7 @@ init_dispatch(Config) ->
 			{[<<"resetags">>], rest_resource_etags, []},
 			{[<<"rest_expires">>], rest_expires, []},
 			{[<<"loop_timeout">>], http_handler_loop_timeout, []},
+			{[<<"cors">>], cors_handler, []},
 			{[], http_handler, []}
 		]}
 	].
