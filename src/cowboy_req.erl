@@ -88,6 +88,7 @@
 
 %% Response API.
 -export([set_resp_cookie/4]).
+-export([set_resp_headers/2]).
 -export([set_resp_header/3]).
 -export([set_resp_body/2]).
 -export([set_resp_body_fun/3]).
@@ -832,6 +833,14 @@ multipart_skip(Req) ->
 set_resp_cookie(Name, Value, Opts, Req) ->
 	Cookie = cowboy_http:cookie_to_iodata(Name, Value, Opts),
 	set_resp_header(<<"set-cookie">>, Cookie, Req).
+
+%% @doc Add a list of headers to the response.
+-spec set_resp_headers(cowboy_http:headers(), Req)
+	-> Req when Req::req().
+set_resp_headers(Headers, Req) ->
+	lists:foldl(
+		fun ({Name, Value}, Req2) -> set_resp_header(Name, Value, Req2) end,
+		Req, Headers).
 
 %% @doc Add a header to the response.
 -spec set_resp_header(binary(), iodata(), Req)
