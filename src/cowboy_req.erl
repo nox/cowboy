@@ -403,6 +403,10 @@ parse_header(Name, Req=#http_req{p_headers=PHeaders}) ->
 
 %% @doc Default values for semantic header parsing.
 -spec parse_header_default(binary()) -> any().
+parse_header_default(<<"access-control-request-headers">>) ->
+	%% If there are no Access-Control-Request-Headers headers let header
+	%% field-names be the empty list.
+	[];
 parse_header_default(<<"transfer-encoding">>) -> [<<"identity">>];
 parse_header_default(_Name) -> undefined.
 
@@ -465,6 +469,18 @@ parse_header(Name, Req, Default) when Name =:= <<"origin">> ->
 	parse_header(Name, Req, Default,
 		fun (Value) ->
 			cowboy_http:origin(Value)
+		end);
+parse_header(Name, Req, Default)
+		when Name =:= <<"access-control-request-method">> ->
+	parse_header(Name, Req, Default,
+		fun (Value) ->
+			cowboy_http:token(Value, fun (Method) -> Method end)
+		end);
+parse_header(Name, Req, Default)
+		when Name =:= <<"access-control-request-headers">> ->
+	parse_header(Name, Req, Default,
+		fun (Value) ->
+			cowboy_http:nonempty_list(Value, fun cowboy_http:token_ci/2)
 		end);
 parse_header(Name, Req, Default) ->
 	{Value, Req2} = header(Name, Req, Default),
