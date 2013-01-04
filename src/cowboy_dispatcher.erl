@@ -18,6 +18,7 @@
 
 %% API.
 -export([match/3]).
+-export([match_host/2]).
 
 -type bindings() :: [{atom(), binary()}].
 -type tokens() :: [binary()].
@@ -28,6 +29,7 @@
 
 -export_type([bindings/0]).
 -export_type([tokens/0]).
+-export_type([match_rule/0]).
 -export_type([dispatch_rules/0]).
 
 -ifdef(TEST).
@@ -87,6 +89,16 @@ match([{HostMatch, PathMatchs}|Tail], Tokens, Path)
 	end;
 match(Dispatch, Host, Path) ->
 	match(Dispatch, split_host(Host), Path).
+
+%% @doc Match hostname tokens against match rule.
+-spec match_host(Host::binary() | tokens(), match_rule())
+	-> {true, bindings(), HostInfo::undefined | tokens()} | false.
+match_host(_, '_') ->
+	{true, [], []};
+match_host(Tokens, HostMatch) when is_list(Tokens) ->
+	list_match(Tokens, lists:reverse(HostMatch), []);
+match_host(Host, HostMatch) ->
+	match_host(split_host(Host), HostMatch).
 
 -spec match_path(dispatch_path(),
 	HostInfo::undefined | tokens(), binary() | tokens(), bindings())
